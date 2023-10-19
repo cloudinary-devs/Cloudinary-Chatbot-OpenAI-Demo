@@ -1,42 +1,17 @@
-![Cloudinary Developers](https://github.com/cloudinary-devs/.github/blob/main/assets/cloudinary-banner.png?raw=true)
+import express from "express";
+import bodyParser from "body-parser";
+import OpenAI from "openai";
+import "dotenv/config";
 
-<div align="center">
-  <br />
-  <a href="https://twitter.com/cloudinary" target="_blank">Twitter</a>
-    <span>&nbsp;&nbsp;-&nbsp;&nbsp;</span>
-  <a href="https://cloudinary.com/" target="_blank">Cloudinary</a>
-    <span>&nbsp;&nbsp;-&nbsp;&nbsp;</span>
-  <a href="https://cloudinary.com/documentation" target="_blank">Docs</a>
-    <span>&nbsp;&nbsp;-&nbsp;&nbsp;</span>
-  <a href="https://github.com/cloudinary-devs" target="_blank">Code Samples</a>
-    <span>&nbsp;&nbsp;-&nbsp;&nbsp;</span>
-  <a href="https://cloudinary.com/blog/" target="_blank">Blog</a>
-    <span>&nbsp;&nbsp;-&nbsp;&nbsp;</span>
-  <a href="https://community.cloudinary.com/" target="_blank">Community</a>
-  <br />
-  <hr />
-</div>
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
-# Cloudinary OpenAI Chatbot Sample
+console.log(process.env.OPENAI_API_KEY)
 
-This sample app shows how to build and customize a a chatbot using [OpenAI APIs and SDK](https://platform.openai.com/docs/introduction). In this demo we also make use of DALLE for the generation of AI image to be used as avatars in the chat.
+const app = express();
+app.use(bodyParser.json());
 
-## Run this project
-
-### Locally
-
-- Clone this repo
-- In the `.env` file enter your `OPENAI_API_KEY`.
-- Add your environment variables in the `.env` file.
-- Run `npm run start` to run your NodeJS server in the port 6000.
-- In a separate terminal run `npm run dev` to run your React application.
-- Open [http://localhost:3000/](http://localhost:3000/) in your browser.
-
-## ChatBot Functionality - server.js
-
-This code uses the [OpenAI SDK method **completions**](https://platform.openai.com/docs/guides/gpt/chat-completions-api) to generate a conversation using ChatGPT 3.5 for the conversationinal AI. We also provided a `demoModel` to train our chatbot to focus on content around the Cloudinary Developer documentation.
-
-```javascript
 app.post("/api/chat", async (req, res) => {
   /*
     Train the model by giving it some previous conversations
@@ -102,7 +77,7 @@ app.post("/api/chat", async (req, res) => {
         `,
     },
   ];
-  
+
   const { messages } = req.body;
   messages[messages.length - 1].content = `${
     messages[messages.length - 1].content
@@ -123,13 +98,11 @@ app.post("/api/chat", async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
-```
 
-## AI Images With DALLE - server.js
-
-This code uses the the [Image Create endpoint](https://platform.openai.com/docs/api-reference/images) that uses DALLE in the background to generate the AI images (avatars) for the chatbot.
-
-```javascript
+/**
+ * Generate a random animal avatar
+ * using DALLE
+ */
 app.post("/api/avatar", async (req, res) => {
   const requestData = {
     prompt: `generate picture of animal`,
@@ -162,12 +135,8 @@ app.post("/api/avatar", async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
-```
 
-## Cloudinary Community
-
-Engage in collaborative coding, connect with fellow enthusiasts, and gather insights from a vibrant open-source network over on [Twitter](https://twitter.com/cloudinary), [Discord](https://discord.gg/cloudinary), or the [Community Forums](https://community.cloudinary.com/)
-
-## Show your support
-
-Give a ⭐️ if this project helped you, and watch this repo to stay up to date.
+const PORT = 6000;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
