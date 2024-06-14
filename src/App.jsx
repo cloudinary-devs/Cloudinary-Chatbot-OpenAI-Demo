@@ -30,7 +30,7 @@ function App() {
       setisLoading("DONE");
       setMessages([...newMessages, botReply]);
     } catch (error) {
-      console.error(error);
+      return "Error"
     }
   };
 
