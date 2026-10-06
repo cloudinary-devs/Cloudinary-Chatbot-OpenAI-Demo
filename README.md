@@ -19,150 +19,96 @@
 
 # Cloudinary OpenAI Chatbot Sample
 
-This sample app shows how to build and customize a a chatbot using [OpenAI APIs and SDK](https://platform.openai.com/docs/introduction). In this demo we also make use of DALLE for the generation of AI image to be used as avatars in the chat.
+This sample app shows how to build and customize a chatbot using the [OpenAI API and SDK](https://developers.openai.com/api/docs) with [Cloudinary](https://cloudinary.com/documentation) for media. Replies stream into the chat as they're generated, users can share images in the thread, and AI-generated avatars are hosted and optimized by Cloudinary.
+
+**Stack:** Node.js 24 LTS (22.12+ supported), Express 5, OpenAI Node SDK 7 (Responses API), Cloudinary Node SDK 2, React 19, Vite 8.
 
 ## Run this project
 
 ### Locally
 
-- Clone this repo
-- In the `.env` file enter your `OPENAI_API_KEY`.
-- Add your environment variables in the `.env` file.
-- Run `npm run start` to run your NodeJS server in the port 6000.
-- In a separate terminal run `npm run dev` to run your React application.
+- Clone this repo and run `npm install`.
+- Copy `.env.example` to `.env` and set `OPENAI_API_KEY` and `CLOUDINARY_URL` (from your [Cloudinary Console](https://console.cloudinary.com/)).
+- Run `npm run start` to run the Node.js server on port 3001.
+- In a separate terminal run `npm run dev` to run the React application.
 - Open [http://localhost:3000/](http://localhost:3000/) in your browser.
 
-## ChatBot Functionality - server.js
+Without `CLOUDINARY_URL` the chat still works, but image sharing and avatars are disabled.
 
-This code uses the [OpenAI SDK method **completions**](https://platform.openai.com/docs/guides/gpt/chat-completions-api) to generate a conversation using ChatGPT 3.5 for the conversationinal AI. We also provided a `demoModel` to train our chatbot to focus on content around the Cloudinary Developer documentation.
+## ChatBot Functionality - backend/server.js
+
+`POST /api/chat` uses the [Responses API](https://developers.openai.com/api/docs/guides/text) with `stream: true` and relays text deltas to the browser as Server-Sent Events. A system prompt (`instructions`) and a few example exchanges (`demoModel`) keep the chatbot focused on the Cloudinary developer documentation.
 
 ```javascript
-app.post("/api/chat", async (req, res) => {
-  /*
-    Train the model by giving it some previous conversations
-    */
-  const demoModel = [
-    {
-      role: "user",
-      content:
-        "Hi, can you tell me where to find information about the Cloudinary React sdk?",
-    },
-    {
-      role: "assistant",
-      content:
-        "Yes, the conentent can be found inside of this website https://cloudinary.com/documentation/react_integration",
-    },
-    {
-      role: "user",
-      content:
-        "can you tell me where to find information about the cloudinary transformations",
-    },
-    {
-      role: "assistant",
-      content:
-        "Yes, the conentent can be found inside of this website https://cloudinary.com/documentation/react_image_transformations",
-    },
-    {
-      role: "user",
-      content: "can you tell me how to display an image using the cloudinary React SDK",
-    },
-    {
-      role: "assistant",
-      content: `Yes, to display an image using cloudinary follow this guide https://cloudinary.com/documentation/react_integration#landingpage and this code sample
-      import React from 'react'
-      import {AdvancedImage} from '@cloudinary/react';
-      import {Cloudinary} from "@cloudinary/url-gen";
-      
-      // Import required actions.
-      import {sepia} from "@cloudinary/url-gen/actions/effect";
-      
-      const App = () => {
-      
-        // Create and configure your Cloudinary instance.
-        const cld = new Cloudinary({
-          cloud: {
-            cloudName: 'demo'
-          }
-        }); 
-      
-        // Use the image with public ID, 'front_face'.
-        const myImage = cld.image('front_face');
-      
-        // Apply the transformation.
-        myImage
-        .effect(sepia());  // Apply a sepia effect.
-      
-        // Render the transformed image in a React component.
-        return (
-          <div>
-            <AdvancedImage cldImg={myImage} />
-          </div>
-        )
-      };
-        `,
-    },
-  ];
-  
-  const { messages } = req.body;
-  messages[messages.length - 1].content = `${
-    messages[messages.length - 1].content
-  }.`;
+const stream = await openai.responses.create(
+  {
+    model: CHAT_MODEL,
+    instructions: INSTRUCTIONS,
+    input: [...demoModel, ...input],
+    stream: true,
+    store: false,
+  },
+  { signal: abort.signal }
+);
 
-  /**
-   * Call the OpenAI SDK and get a response
-   */
-  try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: [...messages, ...demoModel], // pass the new message and the previous messages
-    });
-    console.log(response);
-    res.json(response.choices[0].message);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Internal Server Error" });
+for await (const event of stream) {
+  if (event.type === "response.output_text.delta") {
+    send({ type: "delta", text: event.delta });
   }
+}
+```
+
+The request is aborted when the browser disconnects or the user presses **Stop**, so you aren't billed for tokens nobody reads.
+
+## Image sharing through Cloudinary
+
+Images attached in the chat are uploaded to Cloudinary (`POST /api/upload`). The thread displays them with `f_auto,q_auto` delivery URLs, and the model receives a size-limited JPEG delivery URL built from the Cloudinary public ID. The server only accepts public IDs from its own upload folder, so every image in a conversation goes through Cloudinary.
+
+## AI Avatars - backend/server.js
+
+`POST /api/avatar` generates two animal avatars with a GPT Image model. GPT Image models return base64 data only, so the server uploads each image to Cloudinary and returns a square, auto-cropped, auto-format delivery URL. Avatars are generated once per server process.
+
+```javascript
+const response = await openai.images.generate({
+  model: IMAGE_MODEL,
+  prompt: "A friendly cartoon animal head, ...",
+  n: 2,
+  size: "1024x1024",
+  quality: "low",
+  output_format: "webp",
 });
 ```
 
-## AI Images With DALLE - server.js
+## Configuration
 
-This code uses the the [Image Create endpoint](https://platform.openai.com/docs/api-reference/images) that uses DALLE in the background to generate the AI images (avatars) for the chatbot.
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `OPENAI_API_KEY` | – | OpenAI API key |
+| `CLOUDINARY_URL` | – | `cloudinary://<api_key>:<api_secret>@<cloud_name>` |
+| `OPENAI_MODEL` | `gpt-5.4-mini` | Chat model |
+| `OPENAI_IMAGE_MODEL` | `gpt-image-1-mini` | Avatar model |
+| `CLOUDINARY_FOLDER` | `openai-chatbot` | Folder for uploads and avatars |
+| `PORT` | `3001` | API server port |
 
-```javascript
-app.post("/api/avatar", async (req, res) => {
-  const requestData = {
-    prompt: `generate picture of animal`,
-    n: 2,
-    size: "256x256",
-  };
+## Troubleshooting
 
-  try {
-    const response = await fetch(
-      "https://api.openai.com/v1/images/generations",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        },
-        body: JSON.stringify(requestData),
-      }
-    );
+### Uploads and avatars fail with `Server returned unexpected status code - 403`
 
-    if (response.ok) {
-      const data = await response.json();
-      console.log("Response:", data);
-      res.json(data.data);
-    } else {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-  } catch (error) {
-    console.error("Error:", error);
-    res.status(500).json({ error: "Internal Server Error" });
-  }
-});
+The API key in `CLOUDINARY_URL` doesn't have permission to upload. The Cloudinary SDK hides the reason, but the raw response is:
+
 ```
+Request forbidden due to missing permissions (actions=["create"])
+```
+
+The key itself is valid, since other API calls such as `ping` succeed, but it isn't allowed to create assets. To fix it:
+
+1. In the [Cloudinary Console](https://console.cloudinary.com/), go to **Settings → API Keys**.
+2. Give the key a role that can upload (for example Admin, or a custom role that includes asset *create*), or generate a new key with upload rights.
+3. Update `CLOUDINARY_URL` in `.env` and restart `npm run start`, because `.env` is only read at startup.
+
+### `[vite] http proxy error: /api/...`
+
+The API server isn't reachable. Check that `npm run start` is running in its own terminal on Node 22.12 or newer (`nvm use` picks up `.nvmrc`). Vite uses `strictPort`, so if another app already holds port 3000, `npm run dev` stops instead of moving onto the API server's port. Free the port or run `npm run dev -- --port 3002`.
 
 ## Cloudinary Community
 
