@@ -1,117 +1,148 @@
-import { useState, useEffect } from "react";
-import ReactMarkdown from "react-markdown";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import Composer from "./components/Composer";
+import Message from "./components/Message";
+import { fetchAvatars, streamChat } from "./lib/api";
 import "./App.css";
 
+// Distance from the bottom (px) within which new content keeps the view pinned.
+const STICK_THRESHOLD = 80;
+
 function App() {
+  // Completed messages. The in-progress reply lives in `draft` so streaming
+  // tokens only re-render that one message, not the whole thread.
   const [messages, setMessages] = useState([]);
-  const [inputMessage, setInputMessage] = useState("");
-  const [isLoading, setisLoading] = useState("START");
-  const [userImage, setUserImage] = useState(null);
-  const [assistantImage, setAssistantImage] = useState(null);
+  const [draft, setDraft] = useState(null);
+  const [error, setError] = useState(null);
+  const [avatars, setAvatars] = useState({ user: null, assistant: null });
 
-  const handleMessageSend = async () => {
-    setisLoading("LOADING");
-    if (inputMessage.trim() === "") return;
+  const chatRef = useRef(null);
+  const stickToBottomRef = useRef(true);
+  const abortRef = useRef(null);
 
-    const newMessages = [...messages, { role: "user", content: inputMessage }];
-    setMessages(newMessages);
-    setInputMessage("");
+  const streaming = draft !== null;
 
-    try {
-      const response = await fetch("api/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ messages: newMessages }),
-      });
-      const data = await response.json();
-      const botReply = { role: "assistant", content: data.content };
-      setisLoading("DONE");
-      setMessages([...newMessages, botReply]);
-    } catch (error) {
-      return "Error"
-    }
+  const handleSend = useCallback(
+    async (text, attachments) => {
+      const userMessage = {
+        id: crypto.randomUUID(),
+        role: "user",
+        content: text,
+        images: attachments,
+      };
+      const history = [...messages, userMessage];
+      const assistantId = crypto.randomUUID();
+
+      setMessages(history);
+      setDraft({ id: assistantId, content: "" });
+      setError(null);
+      stickToBottomRef.current = true;
+
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      // Coalesce token deltas into at most one state update per animation frame.
+      let reply = "";
+      let frame = 0;
+      const flush = () => {
+        frame = 0;
+        setDraft({ id: assistantId, content: reply });
+      };
+
+      try {
+        await streamChat(
+          history.map(({ role, content, images }) => ({
+            role,
+            content,
+            images: images?.map((image) => image.publicId),
+          })),
+          {
+            signal: controller.signal,
+            onDelta: (delta) => {
+              reply += delta;
+              frame ||= requestAnimationFrame(flush);
+            },
+          }
+        );
+      } catch (err) {
+        if (err.name !== "AbortError") setError(err.message);
+      } finally {
+        cancelAnimationFrame(frame);
+        if (reply) {
+          setMessages((current) => [
+            ...current,
+            { id: assistantId, role: "assistant", content: reply },
+          ]);
+        }
+        setDraft(null);
+        abortRef.current = null;
+      }
+    },
+    [messages]
+  );
+
+  const handleStop = useCallback(() => abortRef.current?.abort(), []);
+
+  // Abort an in-flight reply if the component unmounts.
+  useEffect(() => () => abortRef.current?.abort(), []);
+
+  // Keep the newest content in view unless the user has scrolled up to read.
+  useLayoutEffect(() => {
+    const chat = chatRef.current;
+    if (chat && stickToBottomRef.current) chat.scrollTop = chat.scrollHeight;
+  }, [messages, draft]);
+
+  const handleScroll = () => {
+    const chat = chatRef.current;
+    stickToBottomRef.current =
+      chat.scrollHeight - chat.scrollTop - chat.clientHeight < STICK_THRESHOLD;
   };
 
+  // Load AI-generated avatars in the background; the chat is usable without them.
   useEffect(() => {
-    // Scroll to the bottom of the chat window when new messages are added
-    const chatContainer = document.getElementById("chat-container");
-    chatContainer.scrollTop = chatContainer.scrollHeight;
-  }, [messages]);
-
-  useEffect(() => {
-    // Create a new avatar when the page loads
-    const generateImage = async () => {
-      try {
-        const response = await fetch("api/avatar", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ prompt }),
-        });
-        const data = await response.json();
-        console.log("images", data);
-        setUserImage(data[0].url);
-        setAssistantImage(data[1].url);
-        return data;
-      } catch (error) {
-        console.error(error);
-      }
+    let ignore = false;
+    fetchAvatars()
+      .then(([user, assistant]) => {
+        if (!ignore) setAvatars({ user: user?.url, assistant: assistant?.url });
+      })
+      .catch((err) => console.warn("Avatars unavailable:", err.message));
+    return () => {
+      ignore = true;
     };
-    generateImage();
   }, []);
 
   return (
     <div className="App">
-      <div className="chat-container" id="chat-container">
-        {messages.map((message, index) =>
-          message.content !== undefined ? (
-            <div key={index} className={`message ${message.role}`}>
-              <img
-                src={message.role === "user" ? userImage : assistantImage}
-                alt="user image"
-                className="avatar"
-              />
-              {message.role === "assistant" ? (
-                <div className="assistant-message">
-                  <ReactMarkdown>{message.content}</ReactMarkdown>
-                </div>
-              ) : (
-                message.content
-              )}
-            </div>
+      <div className="chat-container" ref={chatRef} onScroll={handleScroll}>
+        {messages.map((message) => (
+          <Message
+            key={message.id}
+            role={message.role}
+            content={message.content}
+            images={message.images}
+            avatar={avatars[message.role]}
+          />
+        ))}
+        {draft &&
+          (draft.content ? (
+            <Message
+              key={draft.id}
+              role="assistant"
+              content={draft.content}
+              avatar={avatars.assistant}
+              streaming
+            />
           ) : (
-            <div key={index} className="message assistant">
-              Error in the server
+            <div className="spinner-bar">
+              <div className="spinner chat" aria-label="Waiting for reply" />
             </div>
-          )
-        )}
-        {isLoading === "START" || isLoading === "DONE" ? (
-          <></>
-        ) : (
-          <div className="spinner-bar">
-            <div className="spinner chat"></div>
+          ))}
+        {error && (
+          <div className="message assistant error" role="alert">
+            {error}
           </div>
         )}
       </div>
-      <div className="input-container">
-        {assistantImage !== null && userImage !== null ? (
-          <>
-            <textarea
-              rows="4"
-              cols="50"
-              value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
-              placeholder="Chat with the AI bot"
-            />
-            <button onClick={handleMessageSend}>Send</button>
-          </>
-        ) : (
-          <div className="spinner"></div>
-        )}
-      </div>
+      <Composer streaming={streaming} onSend={handleSend} onStop={handleStop} />
     </div>
   );
 }
