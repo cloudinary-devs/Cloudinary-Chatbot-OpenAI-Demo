@@ -1,11 +1,30 @@
+/*
+  The chat UI is dark-only. Colors are defined once here so text never ends up
+  on a background it wasn't checked against (all text pairs meet WCAG AA 4.5:1).
+*/
 :root {
+  --bg: #1b1b1f;
+  --surface-user: #26262c;
+  --surface-assistant: #303038;
+  --surface-input: #2a2a31;
+  --surface-code: #1b1b1f;
+  --text: #f2f2f5;
+  --text-muted: #b8b8c2;
+  --link: #9cc4ff;
+  --border: #6a6a78;
+  --accent: #2f63c9;
+  --accent-hover: #2856b0;
+  --secondary: #3a3a44;
+  --error-surface: #4a1f24;
+  --error-text: #ffd0d0;
+
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  color-scheme: dark;
+  color: var(--text);
+  background-color: var(--bg);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -16,11 +35,9 @@
 
 a {
   font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
+  color: var(--link);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 body {
@@ -38,37 +55,37 @@ h1 {
 
 button {
   border: 1px solid transparent;
+  border-radius: 6px;
   padding: 0.6em 1.2em;
   font-size: 1em;
   font-weight: 500;
   font-family: inherit;
-  background-color: #1a1a1a;
+  color: #ffffff;
+  background-color: var(--accent);
   cursor: pointer;
-  transition: border-color 0.25s;
+  transition: background-color 0.2s, border-color 0.2s;
 }
-button:hover {
-  border-color: #646cff;
+button:hover:not(:disabled) {
+  background-color: var(--accent-hover);
 }
-button:focus,
 button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
 }
 
 .avatar {
-  height: 25px;
-  width: 25px;
-  margin: 8px;
+  flex: none;
+  height: 32px;
+  width: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.avatar-fallback {
+  display: grid;
+  place-items: center;
+  font-size: 0.7em;
+  font-weight: 600;
+  background: var(--accent);
+  color: #ffffff;
 }

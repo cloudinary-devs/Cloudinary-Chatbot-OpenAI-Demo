@@ -3,59 +3,170 @@
 }
 
 .App {
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
   display: flex;
-  align-items: center;
-  justify-content: flex-end;
   flex-direction: column;
-  background: #222;
-}
-
-
-.input-container {
-  width: 100%;
-  display: flex;
-  justify-content: center;
-}
-
-textarea {
-  min-width: 500px;
-  border: 0;
-}
-
-.input-container {
-  margin: 24px;
-}
-
-button {
-    padding: 0.6em 1.2em;
-    font-size: 1em;
-    font-weight: 500;
-    font-family: inherit;
-    background-color: #1a1a1a;
-    cursor: pointer;
-    transition: border-color 0.25s;
+  background: var(--bg);
 }
 
 .chat-container {
+  flex: 1;
   width: 100%;
-  overflow-y: scroll;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .message {
-  min-height: 100px;
+  min-height: 64px;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  gap: 12px;
   padding: 16px;
+  /* Skip layout/paint for off-screen messages in long threads. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 96px;
+}
+
+.message-body {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .user {
-  background: #373737de;
+  background: var(--surface-user);
 }
 
 .assistant {
-  background: #777777de;
+  background: var(--surface-assistant);
+}
+
+.message.error {
+  background: var(--error-surface);
+  color: var(--error-text);
+}
+
+.user-message {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.assistant-message pre {
+  overflow-x: auto;
+  padding: 12px;
+  border-radius: 6px;
+  background: var(--surface-code);
+}
+
+.assistant-message code {
+  font-size: 0.9em;
+}
+
+.assistant-message img,
+.message-images img {
+  max-width: min(100%, 320px);
+  height: auto;
+  border-radius: 6px;
+}
+
+.message-images {
   display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.cursor {
+  display: inline-block;
+  width: 0.5em;
+  height: 1em;
+  vertical-align: text-bottom;
+  background: currentColor;
+  animation: blink 1s steps(1) infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+.composer {
+  width: 100%;
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.input-container {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+textarea {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface-input);
+  resize: vertical;
+}
+
+textarea::placeholder {
+  color: var(--text-muted);
+}
+
+textarea:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 1px;
+}
+
+button.attach,
+.attachment button {
+  background-color: var(--secondary);
+  color: var(--text);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.attachments {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.attachment {
+  position: relative;
+}
+
+.attachment img {
+  display: block;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+.attachment button {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  padding: 0 6px;
+  border-radius: 50%;
+  line-height: 1.4;
+}
+
+.error {
+  color: var(--error-text);
 }
 
 .spinner {
@@ -63,9 +174,15 @@ button {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  border: 4px solid rgba(0, 0, 0, 0.1);
-  border-left-color: #3498db; /* Change this to the color you want for the spinner */
+  border: 4px solid var(--secondary);
+  border-left-color: var(--link);
   animation: spin 1s infinite linear;
+}
+
+.spinner.small {
+  margin: 0;
+  width: 24px;
+  height: 24px;
 }
 
 @keyframes spin {
@@ -81,5 +198,11 @@ button {
   width: 100%;
   display: flex;
   justify-content: center;
-  margin: 0 16px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cursor,
+  .spinner {
+    animation: none;
+  }
 }
